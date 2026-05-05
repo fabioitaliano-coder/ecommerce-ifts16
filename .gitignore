@@ -1,0 +1,12 @@
+node_modules/
+npm-debug.log
+
+# Entornos y datos locales
+.env
+*.sqlite
+
+# macOS
+.DS_Store
+
+# Documentos de clase (opcional)
+clase5.md
