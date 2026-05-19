@@ -5,6 +5,11 @@ const express = require('express');
 // Sirve para agrupar todas las rutas de productos en un solo lugar.
 const router = express.Router();
 
+// asyncHandler es una función wrapper.
+// Recibe un handler async y devuelve otro handler compatible con Express
+// que reenvía errores al middleware global.
+const asyncHandler = require('../utils/asyncHandler');
+
 // Traemos el controller de productos.
 // El router delega la lógica en este archivo en lugar de resolverla acá.
 const controller = require('../controllers/productsController');
@@ -18,19 +23,21 @@ const controller = require('../controllers/productsController');
 // este router ejecuta controller.getAll.
 // Archivo siguiente para mirar en clase:
 // ../controllers/productsController.js
-router.get('/', controller.getAll);
+router.get('/', asyncHandler(controller.getAll));
 
 // Si el cliente hace GET /api/productos/5
 // ":id" captura el valor dinámico que viene en la URL.
-router.get('/:id', controller.getById);
+router.get('/:id', asyncHandler(controller.getById));
 
 // POST /api/productos crea un producto nuevo.
-router.post('/', controller.create);
+router.post('/', asyncHandler(controller.create));
 
 // PUT /api/productos/:id modifica un producto existente.
-router.put('/:id', controller.update);
+router.put('/:id', asyncHandler(controller.update));
 
 // DELETE /api/productos/:id elimina un producto existente.
-router.delete('/:id', controller.remove);
+router.delete('/:id', asyncHandler(controller.remove));
 
+// module.exports devuelve el router ya configurado.
+// server.js lo recibe y lo monta bajo /api/productos.
 module.exports = router;

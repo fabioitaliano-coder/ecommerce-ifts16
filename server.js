@@ -13,7 +13,14 @@ const productsRouter = require('./src/routes/products');
 const clientsRouter = require('./src/routes/clients');
 const discountsRouter = require('./src/routes/discounts');
 const checkoutRouter = require('./src/routes/checkout');
+const categoriesRouter = require('./src/routes/categories');
 
+// initializeDatabase sale de src/models/index.js.
+// Es la función que sincroniza tablas y ejecuta el seed inicial.
+const { initializeDatabase } = require('./src/models');
+
+// app es la aplicación principal de Express.
+// Sobre esta constante registramos middlewares, rutas y manejo de errores.
 const app = express();
 
 // PASO 1:
@@ -32,20 +39,63 @@ app.use(express.static('public'));
 // Archivo siguiente para mirar en clase:
 // ./src/routes/products.js
 app.use('/api/productos', productsRouter);
+app.use('/api/categorias', categoriesRouter);
 app.use('/api/clientes', clientsRouter);
 app.use('/api/descuentos', discountsRouter);
 app.use('/api/checkout', checkoutRouter);
 
 // Ruta auxiliar para mostrar qué recursos existen en la API.
 app.get('/api', (req, res) => {
+  // req y res los crea Express.
+  // En esta ruta no necesitamos leer req, pero sí usamos res para devolver
+  // un mapa simple de recursos disponibles.
   res.json({
     ok: true,
-    recursos: ['/api/productos', '/api/clientes', '/api/descuentos', '/api/checkout']
+    recursos: ['/api/productos', '/api/categorias', '/api/clientes', '/api/descuentos', '/api/checkout']
+  });
+});
+
+// Middleware final de errores:
+// cualquier excepción que venga desde una ruta termina acá.
+app.use((error, req, res, next) => {
+  // error llega desde next(error) o desde asyncHandler.
+  // req y res son los objetos estándar de Express para esa petición.
+  // next existe por contrato de middleware, aunque acá no lo usemos.
+  console.error(error);
+
+  if (error.name === 'SequelizeValidationError') {
+    return res.status(400).json({
+      error: 'Datos invalidos',
+      detail: error.errors.map(item => item.message)
+    });
+  }
+
+  if (error.name === 'SequelizeUniqueConstraintError') {
+    return res.status(409).json({
+      error: 'El valor ya existe y debe ser unico',
+      detail: error.errors.map(item => item.message)
+    });
+  }
+
+  return res.status(500).json({
+    error: 'Ocurrio un error interno',
+    detail: error.message
   });
 });
 
 const PORT = process.env.PORT || 3080;
 
 // PASO 4:
-// El servidor queda "escuchando" pedidos HTTP en este puerto.
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+// Antes de aceptar peticiones, sincronizamos la base.
+// Recién después dejamos el servidor escuchando.
+initializeDatabase()
+  .then(() => {
+    app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  })
+  .catch(error => {
+    console.error('No se pudo inicializar la base de datos:', error);
+    process.exit(1);
+  });
+
+// Este archivo no usa module.exports porque es el punto de arranque.
+// Se ejecuta directamente con node server.js y su trabajo es iniciar la app.

@@ -1,14 +1,16 @@
-const store = require('../data/store');
-const { Client } = require('../models/Client');
+// Client es el modelo Sequelize asociado a la tabla clients.
+const { Client } = require('../models');
 
 const clientsController = {
-  getAll(req, res) {
-    res.json(store.clients);
+  async getAll(req, res) {
+    // req es la petición entrante; res es la respuesta saliente.
+    const clients = await Client.findAll({ order: [['id', 'ASC']] });
+    return res.json(clients);
   },
 
-  getById(req, res) {
-    const id = Number(req.params.id);
-    const client = store.clients.find(item => item.id === id);
+  async getById(req, res) {
+    // req.params.id viene de la ruta GET /api/clientes/:id.
+    const client = await Client.findByPk(req.params.id);
 
     if (!client) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
@@ -17,18 +19,17 @@ const clientsController = {
     return res.json(client);
   },
 
-  create(req, res) {
+  async create(req, res) {
+    // req.body trae name y email enviados como JSON por el cliente HTTP.
     const { name, email } = req.body;
-    const id = store.nextIds.clients++;
-    const client = new Client({ id, name, email });
-
-    store.clients.push(client);
+    const client = await Client.create({ name, email });
     return res.status(201).json(client);
   },
 
-  update(req, res) {
-    const id = Number(req.params.id);
-    const client = store.clients.find(item => item.id === id);
+  async update(req, res) {
+    // req.params.id identifica el registro.
+    // req.body trae los campos a modificar.
+    const client = await Client.findByPk(req.params.id);
 
     if (!client) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
@@ -38,20 +39,23 @@ const clientsController = {
     if (name !== undefined) client.name = name;
     if (email !== undefined) client.email = email;
 
+    await client.save();
     return res.json(client);
   },
 
-  remove(req, res) {
-    const id = Number(req.params.id);
-    const index = store.clients.findIndex(item => item.id === id);
+  async remove(req, res) {
+    // req.params.id indica qué cliente eliminar.
+    const client = await Client.findByPk(req.params.id);
 
-    if (index === -1) {
+    if (!client) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    store.clients.splice(index, 1);
+    await client.destroy();
     return res.status(204).end();
   }
 };
 
+// module.exports devuelve el objeto clientsController.
+// El router lo importa para registrar sus métodos como handlers.
 module.exports = clientsController;

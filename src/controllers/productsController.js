@@ -1,9 +1,7 @@
-// Traemos el store, que en esta clase funciona como una base de datos en memoria.
-const store = require('../data/store');
-
-// Acá usamos llaves porque este módulo exporta un objeto
-// y nosotros solo queremos sacar la clase Product.
-const { Product } = require('../models/Product');
+// Traemos dos modelos desde src/models/index.js:
+// - Product: para operar sobre la tabla products
+// - Category: para validar y cargar la categoría relacionada
+const { Product, Category } = require('../models');
 
 // Este archivo cumple el rol de CONTROLLER.
 // En MVC, el controller es el "cocinero":
@@ -11,23 +9,34 @@ const { Product } = require('../models/Product');
 // y devuelve la respuesta al cliente.
 
 const productsController = {
-  getAll(req, res) {
+  async getAll(req, res) {
+    // req es el objeto Request que Express crea por cada petición.
+    // Acá no usamos datos de req, pero igualmente Express lo envía.
+    // res es el objeto Response que usamos para devolver JSON.
     // RECORRIDO COMPLETO DE GET /api/productos:
     // 1. server.js recibe la petición y la manda al router.
     // 2. src/routes/products.js llama a controller.getAll.
-    // 3. El controller busca los datos en el store.
+    // 3. El controller busca los datos usando Sequelize.
     // 4. Finalmente responde con JSON.
     //
     // Archivo siguiente para mirar en clase:
-    // ../data/store.js
-    res.json(store.products);
+    // ../models/index.js
+    const products = await Product.findAll({
+      include: [{ model: Category, as: 'category' }],
+      order: [['id', 'ASC']]
+    });
+
+    return res.json(products);
   },
 
-  getById(req, res) {
+  async getById(req, res) {
+    // req.params.id llega desde la ruta "/:id" declarada en el router.
+    // Express extrae ese fragmento dinámico de la URL y lo guarda en params.
     // req.params guarda los parámetros que vienen desde la URL.
     // Si la URL es /api/productos/2, entonces req.params.id vale "2".
-    const id = Number(req.params.id);
-    const product = store.products.find(item => item.id === id);
+    const product = await Product.findByPk(req.params.id, {
+      include: [{ model: Category, as: 'category' }]
+    });
 
     if (!product) {
       return res.status(404).json({ error: 'Producto no encontrado' });
@@ -36,24 +45,33 @@ const productsController = {
     return res.json(product);
   },
 
-  create(req, res) {
+  async create(req, res) {
+    // req.body llega desde express.json().
+    // Ese middleware toma el JSON enviado por el cliente y lo convierte
+    // en un objeto JavaScript disponible acá.
     // req.body trae los datos enviados por el cliente en formato JSON.
-    const { name, price, stock } = req.body;
+    const { name, price, stock, categoryId } = req.body;
 
-    // Tomamos el próximo ID disponible y luego lo incrementamos.
-    const id = store.nextIds.products++;
+    // Verificamos primero que exista la categoría elegida.
+    const category = await Category.findByPk(categoryId);
+    if (!category) {
+      return res.status(400).json({ error: 'Categoria invalida' });
+    }
 
-    // Usamos la clase Product para construir un objeto consistente.
-    const product = new Product({ id, name, price, stock });
+    // create() inserta una fila en la tabla products.
+    const product = await Product.create({ name, price, stock, categoryId });
 
-    // Guardamos el nuevo producto en el store en memoria.
-    store.products.push(product);
-    return res.status(201).json(product);
+    const createdProduct = await Product.findByPk(product.id, {
+      include: [{ model: Category, as: 'category' }]
+    });
+
+    return res.status(201).json(createdProduct);
   },
 
-  update(req, res) {
-    const id = Number(req.params.id);
-    const product = store.products.find(item => item.id === id);
+  async update(req, res) {
+    // req.params.id indica qué producto modificar.
+    // req.body trae solo los campos que el cliente desea cambiar.
+    const product = await Product.findByPk(req.params.id);
 
     if (!product) {
       return res.status(404).json({ error: 'Producto no encontrado' });
@@ -61,28 +79,43 @@ const productsController = {
 
     // Solo actualizamos los campos que efectivamente llegaron.
     // Esto evita pisar datos por error.
-    const { name, price, stock } = req.body;
+    const { name, price, stock, categoryId } = req.body;
     if (name !== undefined) product.name = name;
     if (price !== undefined) product.price = price;
     if (stock !== undefined) product.stock = stock;
+    if (categoryId !== undefined) {
+      const category = await Category.findByPk(categoryId);
+      if (!category) {
+        return res.status(400).json({ error: 'Categoria invalida' });
+      }
+      product.categoryId = categoryId;
+    }
 
-    return res.json(product);
+    await product.save();
+
+    const updatedProduct = await Product.findByPk(product.id, {
+      include: [{ model: Category, as: 'category' }]
+    });
+
+    return res.json(updatedProduct);
   },
 
-  remove(req, res) {
-    const id = Number(req.params.id);
-    const index = store.products.findIndex(item => item.id === id);
+  async remove(req, res) {
+    // req.params.id vuelve a salir del segmento dinámico "/:id" de la ruta.
+    const product = await Product.findByPk(req.params.id);
 
-    if (index === -1) {
+    if (!product) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
-    // splice(index, 1) elimina un elemento del array.
-    store.products.splice(index, 1);
+    // destroy() elimina el registro persistido en la base.
+    await product.destroy();
 
     // 204 significa: "salió bien, pero no tengo contenido para devolver".
     return res.status(204).end();
   }
 };
 
+// module.exports devuelve el objeto productsController completo.
+// El router de productos lo importa y usa cada método como callback de ruta.
 module.exports = productsController;

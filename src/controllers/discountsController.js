@@ -1,14 +1,16 @@
-const store = require('../data/store');
-const { Discount } = require('../models/Discount');
+// Discount es el modelo que representa la tabla discounts.
+const { Discount } = require('../models');
 
 const discountsController = {
-  getAll(req, res) {
-    res.json(store.discounts);
+  async getAll(req, res) {
+    // req y res los entrega Express automáticamente a cada handler.
+    const discounts = await Discount.findAll({ order: [['id', 'ASC']] });
+    return res.json(discounts);
   },
 
-  getById(req, res) {
-    const id = Number(req.params.id);
-    const discount = store.discounts.find(item => item.id === id);
+  async getById(req, res) {
+    // req.params.id sale del parámetro dinámico de la URL.
+    const discount = await Discount.findByPk(req.params.id);
 
     if (!discount) {
       return res.status(404).json({ error: 'Descuento no encontrado' });
@@ -17,18 +19,17 @@ const discountsController = {
     return res.json(discount);
   },
 
-  create(req, res) {
+  async create(req, res) {
+    // code, percent y minTotal llegan en el cuerpo JSON del POST.
     const { code, percent, minTotal } = req.body;
-    const id = store.nextIds.discounts++;
-    const discount = new Discount({ id, code, percent, minTotal });
-
-    store.discounts.push(discount);
+    const discount = await Discount.create({ code, percent, minTotal });
     return res.status(201).json(discount);
   },
 
-  update(req, res) {
-    const id = Number(req.params.id);
-    const discount = store.discounts.find(item => item.id === id);
+  async update(req, res) {
+    // req.params.id marca qué descuento editar.
+    // req.body trae los nuevos valores opcionales.
+    const discount = await Discount.findByPk(req.params.id);
 
     if (!discount) {
       return res.status(404).json({ error: 'Descuento no encontrado' });
@@ -39,20 +40,22 @@ const discountsController = {
     if (percent !== undefined) discount.percent = percent;
     if (minTotal !== undefined) discount.minTotal = minTotal;
 
+    await discount.save();
     return res.json(discount);
   },
 
-  remove(req, res) {
-    const id = Number(req.params.id);
-    const index = store.discounts.findIndex(item => item.id === id);
+  async remove(req, res) {
+    // req.params.id señala qué registro se intenta borrar.
+    const discount = await Discount.findByPk(req.params.id);
 
-    if (index === -1) {
+    if (!discount) {
       return res.status(404).json({ error: 'Descuento no encontrado' });
     }
 
-    store.discounts.splice(index, 1);
+    await discount.destroy();
     return res.status(204).end();
   }
 };
 
+// module.exports expone discountsController para que el router pueda usarlo.
 module.exports = discountsController;
