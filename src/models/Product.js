@@ -43,6 +43,16 @@ const Product = sequelize.define(
     categoryId: {
       type: DataTypes.INTEGER,
       allowNull: false
+    },
+    validFrom: {
+      type: DataTypes.DATEONLY,
+      allowNull: false,
+      defaultValue: '2000-01-01'
+    },
+    validTo: {
+      type: DataTypes.DATEONLY,
+      allowNull: false,
+      defaultValue: '2099-12-31'
     }
   },
   {

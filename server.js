@@ -83,7 +83,11 @@ app.use((error, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 3080;
+// Puerto por defecto para la cursada:
+// si no hay variable de entorno PORT, Express levanta en 3000.
+// Si un alumno ya tiene ocupado ese puerto, puede ejecutar:
+// PORT=3001 npm start (Linux/Mac) o $env:PORT=3001; npm start (PowerShell).
+const PORT = process.env.PORT || 3000;
 
 // PASO 4:
 // Antes de aceptar peticiones, sincronizamos la base.

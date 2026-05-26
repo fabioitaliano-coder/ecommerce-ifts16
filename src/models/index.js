@@ -1,6 +1,7 @@
-// Reutilizamos la conexión principal creada en src/config/database.js.
+﻿// Reutilizamos la conexión principal creada en src/config/database.js.
 // Esta constante representa la puerta de entrada al motor de base.
 const sequelize = require('../config/database');
+const { DataTypes } = require('sequelize');
 
 // Category, Product, Client y Discount son modelos Sequelize.
 // Cada uno representa una tabla concreta de la base.
@@ -8,6 +9,7 @@ const Category = require('./Category');
 const Product = require('./Product');
 const Client = require('./Client');
 const Discount = require('./Discount');
+const { seedDatabase } = require('./seed');
 
 // PASO 2:
 // Definimos la relación 1 a muchos.
@@ -26,60 +28,67 @@ Product.belongsTo(Category, {
   as: 'category'
 });
 
-async function seedDatabase() {
-  // Este seed se ejecuta solo si la tabla de categorías está vacía.
-  // Sirve para que la app siga siendo fácil de probar apenas arranca.
-  const categoriesCount = await Category.count();
-  if (categoriesCount > 0) {
-    return;
+async function ensureProductValidityColumns() {
+  // Qué hace:
+  // garantiza que existan las columnas validFrom y validTo en products.
+  //
+  // Por qué existe:
+  // en bases creadas antes de agregar vigencia, esas columnas no están.
+  // sync() crea tablas faltantes, pero no siempre resuelve este caso legado.
+  //
+  // Qué recibe:
+  // no recibe parámetros; usa la conexión sequelize ya cargada en este módulo.
+  //
+  // Qué devuelve:
+  // Promise<void>. Aplica cambios estructurales solo si faltan columnas.
+
+  const queryInterface = sequelize.getQueryInterface();
+
+  // describeTable devuelve el esquema actual de la tabla products.
+  // Ejemplo: table.id, table.name, table.price, etc.
+  const table = await queryInterface.describeTable('products');
+
+  // Si validFrom no existe, se crea.
+  // defaultValue se usa para que productos existentes no queden null
+  // y sigan vigentes al migrar esta funcionalidad.
+  if (!table.validFrom) {
+    await queryInterface.addColumn('products', 'validFrom', {
+      type: DataTypes.DATEONLY,
+      allowNull: false,
+      defaultValue: '2000-01-01'
+    });
   }
 
-  const ropa = await Category.create({
-    name: 'Ropa',
-    description: 'Indumentaria de ejemplo para la clase'
-  });
-
-  const accesorios = await Category.create({
-    name: 'Accesorios',
-    description: 'Complementos y accesorios'
-  });
-
-  await Product.bulkCreate([
-    { name: 'Camisa', price: 25, stock: 10, categoryId: ropa.id },
-    { name: 'Pantalon', price: 40, stock: 5, categoryId: ropa.id },
-    { name: 'Cinturon', price: 15, stock: 8, categoryId: accesorios.id }
-  ]);
-
-  await Client.create({
-    name: 'Juan Perez',
-    email: 'juan@example.com'
-  });
-
-  await Discount.create({
-    code: 'ALUMNO10',
-    percent: 10,
-    minTotal: 0
-  });
+  // Si validTo no existe, se crea.
+  // Se usa una fecha de cierre lejana para no vencer productos viejos
+  // automáticamente al actualizar el proyecto.
+  if (!table.validTo) {
+    await queryInterface.addColumn('products', 'validTo', {
+      type: DataTypes.DATEONLY,
+      allowNull: false,
+      defaultValue: '2099-12-31'
+    });
+  }
 }
 
 async function initializeDatabase() {
   // PASO 3:
-  // sync() compara los modelos con la base y crea las tablas faltantes.
-  // No borra datos porque usamos force: false.
-  //
-  // Referencia:
-  // https://sequelize.org/docs/v6/core-concepts/model-basics/#model-synchronization
+  // sync() compara modelos contra la base y crea tablas faltantes.
   await sequelize.sync();
-  await seedDatabase();
+
+  // PASO 4:
+  // garantizamos vigencia en products para bases que vienen de clases previas.
+  await ensureProductValidityColumns();
+
+  // PASO 5:
+  // cargamos seed inicial (si corresponde) desde módulo separado.
+  await seedDatabase({ Category, Product, Client, Discount });
 }
 
 // module.exports devuelve un objeto con varias piezas del módulo:
 // - sequelize: la conexión
 // - Category, Product, Client, Discount: los modelos ya cargados
 // - initializeDatabase: la función de arranque
-//
-// Otros archivos pueden pedir solo una parte usando destructuring:
-// const { Product, Category } = require('../models');
 module.exports = {
   sequelize,
   Category,
