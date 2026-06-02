@@ -4,6 +4,7 @@
 // Si la ruta NO tiene ./ o ../, Node busca un paquete instalado.
 // Ejemplo: 'express' sale de node_modules.
 const express = require('express');
+const cors = require('cors');
 
 // Si la ruta tiene ./ o ../, Node busca un archivo de nuestro proyecto.
 // ./ significa "desde la carpeta actual".
@@ -14,6 +15,7 @@ const clientsRouter = require('./src/routes/clients');
 const discountsRouter = require('./src/routes/discounts');
 const checkoutRouter = require('./src/routes/checkout');
 const categoriesRouter = require('./src/routes/categories');
+const authRouter = require('./src/routes/auth');
 
 // initializeDatabase sale de src/models/index.js.
 // Es la función que sincroniza tablas y ejecuta el seed inicial.
@@ -27,6 +29,10 @@ const app = express();
 // Express prepara la app para poder leer JSON enviado por el cliente.
 // Esto será útil en POST y PUT.
 app.use(express.json());
+
+// CORS habilita comunicación entre orígenes distintos.
+// En esta cursada sirve como base para una futura separación de frontend/backend.
+app.use(cors());
 
 // PASO 2:
 // Esta línea sirve el frontend desde la carpeta public.
@@ -43,6 +49,7 @@ app.use('/api/categorias', categoriesRouter);
 app.use('/api/clientes', clientsRouter);
 app.use('/api/descuentos', discountsRouter);
 app.use('/api/checkout', checkoutRouter);
+app.use('/api/auth', authRouter);
 
 // Ruta auxiliar para mostrar qué recursos existen en la API.
 app.get('/api', (req, res) => {
@@ -51,7 +58,7 @@ app.get('/api', (req, res) => {
   // un mapa simple de recursos disponibles.
   res.json({
     ok: true,
-    recursos: ['/api/productos', '/api/categorias', '/api/clientes', '/api/descuentos', '/api/checkout']
+    recursos: ['/api/productos', '/api/categorias', '/api/clientes', '/api/descuentos', '/api/checkout', '/api/auth/login']
   });
 });
 

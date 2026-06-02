@@ -1,4 +1,6 @@
 const CART_STORAGE_KEY = 'ifts16-cart';
+const AUTH_TOKEN_KEY = 'ifts16-auth-token';
+const AUTH_USER_KEY = 'ifts16-auth-user';
 
 // products contiene el catálogo completo desde la API.
 let products = [];
@@ -10,6 +12,10 @@ let discounts = [];
 
 // cart persiste en localStorage para no perderse al recargar.
 let cart = [];
+
+// currentUser representa al usuario autenticado en el frontend.
+// Si vale null, la UI debe comportarse como invitado.
+let currentUser = null;
 
 // Referencias a nodos del DOM.
 const productsGrid = document.getElementById('products-grid');
@@ -29,12 +35,31 @@ const categoryFilter = document.getElementById('category-filter');
 const searchInput = document.getElementById('search-input');
 const clientsList = document.getElementById('clients-list');
 const discountsList = document.getElementById('discounts-list');
+const loginEmailInput = document.getElementById('login-email');
+const loginPasswordInput = document.getElementById('login-password');
+const loginButton = document.getElementById('login-button');
+const logoutButton = document.getElementById('logout-button');
+const sessionStatus = document.getElementById('session-status');
+const authFeedback = document.getElementById('auth-feedback');
+const adminPanelButton = document.getElementById('admin-panel-button');
+const adminPanel = document.getElementById('admin-panel');
+const adminPanelClose = document.getElementById('admin-panel-close');
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'USD'
   }).format(value);
+}
+
+function showAuthFeedback(message, type) {
+  authFeedback.textContent = message;
+  authFeedback.className = `alert alert-${type} mt-3`;
+  authFeedback.classList.remove('d-none');
+}
+
+function hideAuthFeedback() {
+  authFeedback.classList.add('d-none');
 }
 
 function showProductsFeedback(message, type) {
@@ -64,6 +89,56 @@ function getCartSubtotal() {
 function saveCart() {
   localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
   cartStorageStatus.textContent = 'Carrito local: guardado';
+}
+
+function saveAuthSession(token, user) {
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+}
+
+function clearAuthSession() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
+  currentUser = null;
+}
+
+function loadAuthSession() {
+  const rawUser = localStorage.getItem(AUTH_USER_KEY);
+
+  if (!rawUser) {
+    currentUser = null;
+    return;
+  }
+
+  try {
+    currentUser = JSON.parse(rawUser);
+  } catch (error) {
+    currentUser = null;
+    clearAuthSession();
+  }
+}
+
+function getAuthToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function updateSessionUI() {
+  const isAdmin = currentUser?.role === 'admin';
+  const isLoggedIn = Boolean(currentUser);
+
+  sessionStatus.textContent = isLoggedIn
+    ? `${currentUser.name} (${currentUser.role})`
+    : 'Invitado';
+  sessionStatus.className = isLoggedIn
+    ? 'badge text-bg-success'
+    : 'badge text-bg-secondary';
+
+  logoutButton.classList.toggle('d-none', !isLoggedIn);
+  adminPanelButton.classList.toggle('d-none', !isAdmin);
+
+  if (!isAdmin) {
+    adminPanel.classList.add('d-none');
+  }
 }
 
 function loadCartFromStorage() {
@@ -268,6 +343,44 @@ async function fetchJson(url, errorMessage) {
   return response.json();
 }
 
+async function login() {
+  const email = loginEmailInput.value.trim();
+  const password = loginPasswordInput.value;
+
+  if (!email || !password) {
+    showAuthFeedback('Completá email y contraseña antes de iniciar sesión.', 'warning');
+    return;
+  }
+
+  loginButton.disabled = true;
+  loginButton.textContent = 'Ingresando...';
+
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'No se pudo iniciar sesión.');
+    }
+
+    currentUser = data.user;
+    saveAuthSession(data.token, data.user);
+    updateSessionUI();
+    showAuthFeedback(`Sesión iniciada como ${data.user.name} (${data.user.role}).`, 'success');
+    loginPasswordInput.value = '';
+  } catch (error) {
+    showAuthFeedback(error.message, 'danger');
+  } finally {
+    loginButton.disabled = false;
+    loginButton.textContent = 'Iniciar sesión';
+  }
+}
+
 async function loadSupportData() {
   try {
     const [categoriesData, clientsData, discountsData] = await Promise.all([
@@ -462,6 +575,23 @@ reloadProductsButton.addEventListener('click', async () => {
   await loadProducts();
 });
 
+loginButton.addEventListener('click', login);
+
+logoutButton.addEventListener('click', () => {
+  clearAuthSession();
+  updateSessionUI();
+  hideCheckoutFeedback();
+  showAuthFeedback('Sesión cerrada.', 'info');
+});
+
+adminPanelButton.addEventListener('click', () => {
+  adminPanel.classList.remove('d-none');
+});
+
+adminPanelClose.addEventListener('click', () => {
+  adminPanel.classList.add('d-none');
+});
+
 clearCartButton.addEventListener('click', () => {
   cart = [];
   saveCart();
@@ -479,6 +609,8 @@ categoryFilter.addEventListener('change', () => {
 searchInput.addEventListener('input', renderProducts);
 
 async function initializeScreen() {
+  loadAuthSession();
+  updateSessionUI();
   loadCartFromStorage();
   renderCart();
   await loadSupportData();

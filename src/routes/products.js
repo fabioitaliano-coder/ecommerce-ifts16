@@ -9,6 +9,10 @@ const router = express.Router();
 // Recibe un handler async y devuelve otro handler compatible con Express
 // que reenvía errores al middleware global.
 const asyncHandler = require('../utils/asyncHandler');
+// Estos dos middlewares agregan la capa de seguridad:
+// - authenticateToken verifica identidad
+// - isAdmin verifica permisos
+const { authenticateToken, isAdmin } = require('../middlewares/authMiddleware');
 
 // Traemos el controller de productos.
 // El router delega la lógica en este archivo en lugar de resolverla acá.
@@ -30,13 +34,20 @@ router.get('/', asyncHandler(controller.getAll));
 router.get('/:id', asyncHandler(controller.getById));
 
 // POST /api/productos crea un producto nuevo.
-router.post('/', asyncHandler(controller.create));
+// Orden de ejecución:
+// 1. authenticateToken
+// 2. isAdmin
+// 3. controller.create
+//
+// Si cualquiera de los dos middlewares anteriores falla,
+// el controller nunca se ejecuta.
+router.post('/', authenticateToken, isAdmin, asyncHandler(controller.create));
 
 // PUT /api/productos/:id modifica un producto existente.
-router.put('/:id', asyncHandler(controller.update));
+router.put('/:id', authenticateToken, isAdmin, asyncHandler(controller.update));
 
 // DELETE /api/productos/:id elimina un producto existente.
-router.delete('/:id', asyncHandler(controller.remove));
+router.delete('/:id', authenticateToken, isAdmin, asyncHandler(controller.remove));
 
 // module.exports devuelve el router ya configurado.
 // server.js lo recibe y lo monta bajo /api/productos.

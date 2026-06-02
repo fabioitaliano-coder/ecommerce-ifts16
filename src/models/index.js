@@ -9,6 +9,7 @@ const Category = require('./Category');
 const Product = require('./Product');
 const Client = require('./Client');
 const Discount = require('./Discount');
+const User = require('./User');
 const { seedDatabase } = require('./seed');
 
 // PASO 2:
@@ -82,7 +83,7 @@ async function initializeDatabase() {
 
   // PASO 5:
   // cargamos seed inicial (si corresponde) desde módulo separado.
-  await seedDatabase({ Category, Product, Client, Discount });
+  await seedDatabase({ Category, Product, Client, Discount, User });
 }
 
 // module.exports devuelve un objeto con varias piezas del módulo:
@@ -95,5 +96,6 @@ module.exports = {
   Product,
   Client,
   Discount,
+  User,
   initializeDatabase
 };
