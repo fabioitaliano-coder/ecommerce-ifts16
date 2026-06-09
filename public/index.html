@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>E-Commerce IFTS 16 | Clase 10</title>
+    <title>E-Commerce IFTS 16 | Clase 11</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -71,15 +71,46 @@
         border-radius: 1rem;
         box-shadow: 0 12px 30px rgba(25, 135, 84, 0.16);
       }
+
+      .admin-surface {
+        background: #fff;
+        color: #212529;
+        border-radius: 1rem;
+      }
+
+      .admin-entity-card {
+        border: 1px solid #dfe7f1;
+        border-radius: 1rem;
+      }
+
+      .admin-list-item + .admin-list-item {
+        border-top: 1px solid #e9ecef;
+      }
+
+      .admin-tab-button.active {
+        background-color: #198754;
+        color: #fff;
+        border-color: #198754;
+      }
+
+      .admin-filter-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+
+      .view-shell.d-none {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
     <div class="container py-4 py-lg-5">
       <header class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
         <div>
-          <p class="text-uppercase small fw-semibold text-primary mb-1">Clase 10</p>
-          <h1 class="h2 mb-1">Seguridad, autenticación y autorización</h1>
-          <p class="text-secondary mb-0">La misma app ahora distingue visitantes, clientes y administradores.</p>
+          <p class="text-uppercase small fw-semibold text-primary mb-1">Clase 11</p>
+          <h1 class="h2 mb-1">Panel administrador y mantenimiento de entidades</h1>
+          <p class="text-secondary mb-0">La misma app ahora no solo distingue roles: también le da herramientas reales al administrador.</p>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
           <span id="session-status" class="badge text-bg-secondary">Invitado</span>
@@ -88,7 +119,7 @@
         </div>
       </header>
 
-      <section class="card support-panel mb-4">
+      <section id="auth-panel" class="card support-panel mb-4">
         <div class="card-body">
           <div class="row g-3 align-items-end">
             <div class="col-md-4">
@@ -111,22 +142,357 @@
       </section>
 
       <section id="admin-panel" class="admin-banner p-4 mb-4 d-none">
-        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
           <div>
             <h2 class="h4 mb-1">Panel de administración</h2>
-            <p class="mb-0">Funcionalidad en desarrollo. En esta clase alcanza con mostrarla solo a usuarios admin autenticados.</p>
+            <p class="mb-0">Desde acá el perfil admin puede mantener productos, categorías, clientes y descuentos.</p>
           </div>
           <button id="admin-panel-close" class="btn btn-light">Cerrar panel</button>
         </div>
+
+        <div class="admin-surface p-3 p-lg-4">
+          <div id="admin-feedback" class="alert d-none mb-4" role="alert"></div>
+          <div class="d-flex flex-wrap gap-2 mb-4">
+            <button class="btn btn-outline-success admin-tab-button" data-admin-tab="products">Productos</button>
+            <button class="btn btn-outline-success admin-tab-button" data-admin-tab="categories">Categorías</button>
+            <button class="btn btn-outline-success admin-tab-button" data-admin-tab="clients">Clientes</button>
+            <button class="btn btn-outline-success admin-tab-button" data-admin-tab="discounts">Descuentos</button>
+          </div>
+
+          <div class="row g-4">
+            <div class="col-12 admin-entity-section" data-admin-section="products">
+              <article class="admin-entity-card p-3 p-lg-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                  <div>
+                    <h3 class="h5 mb-1">Productos</h3>
+                    <p class="text-secondary mb-0">Alta, edición y baja del catálogo con categoría, stock y vigencia, sin mezclarlo con las otras entidades.</p>
+                  </div>
+                  <span id="admin-products-status" class="badge text-bg-light">Listo</span>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <p id="admin-products-page-info" class="small text-secondary mb-0">Página 1 de 1</p>
+                  <div class="d-flex gap-2">
+                    <button id="admin-products-new" class="btn btn-sm btn-success" type="button">Nuevo producto</button>
+                    <button id="admin-products-prev" class="btn btn-sm btn-outline-secondary" type="button">Anterior</button>
+                    <button id="admin-products-next" class="btn btn-sm btn-outline-secondary" type="button">Siguiente</button>
+                    <button id="admin-products-export" class="btn btn-sm btn-outline-success" type="button">Bajar Excel</button>
+                  </div>
+                </div>
+
+                <div class="admin-filter-grid mb-3">
+                  <div>
+                    <label for="admin-products-search" class="form-label">Búsqueda global</label>
+                    <input id="admin-products-search" class="form-control" type="search" placeholder="Nombre, categoría..." />
+                  </div>
+                  <div>
+                    <label for="admin-products-sort-by" class="form-label">Ordenar por</label>
+                    <select id="admin-products-sort-by" class="form-select">
+                      <option value="id">ID</option>
+                      <option value="name">Nombre</option>
+                      <option value="price">Precio</option>
+                      <option value="stock">Stock</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="admin-products-sort-order" class="form-label">Dirección</label>
+                    <select id="admin-products-sort-order" class="form-select">
+                      <option value="asc">Ascendente</option>
+                      <option value="desc">Descendente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="admin-products-filter-name" class="form-label">Filtrar nombre</label>
+                    <input id="admin-products-filter-name" class="form-control" type="search" placeholder="Ejemplo: camisa" />
+                  </div>
+                  <div>
+                    <label for="admin-products-filter-category" class="form-label">Filtrar categoría</label>
+                    <input id="admin-products-filter-category" class="form-control" type="search" placeholder="Ejemplo: ropa" />
+                  </div>
+                  <div>
+                    <label for="admin-products-filter-stock" class="form-label">Filtrar stock</label>
+                    <input id="admin-products-filter-stock" class="form-control" type="search" placeholder="Ejemplo: 10" />
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end mb-3">
+                  <button id="admin-products-clear-filters" class="btn btn-sm btn-outline-secondary" type="button">Limpiar filtros</button>
+                </div>
+
+                <form id="admin-product-form" class="row g-3 d-none">
+                  <input id="admin-product-id" type="hidden" />
+                  <div class="col-md-4">
+                    <label for="admin-product-name" class="form-label">Nombre</label>
+                    <input id="admin-product-name" class="form-control" type="text" required />
+                  </div>
+                  <div class="col-md-2">
+                    <label for="admin-product-price" class="form-label">Precio</label>
+                    <input id="admin-product-price" class="form-control" type="number" min="0" step="0.01" required />
+                  </div>
+                  <div class="col-md-2">
+                    <label for="admin-product-stock" class="form-label">Stock</label>
+                    <input id="admin-product-stock" class="form-control" type="number" min="0" step="1" required />
+                  </div>
+                  <div class="col-md-4">
+                    <label for="admin-product-category" class="form-label">Categoría</label>
+                    <select id="admin-product-category" class="form-select" required></select>
+                  </div>
+                  <div class="col-md-3">
+                    <label for="admin-product-valid-from" class="form-label">Válido desde</label>
+                    <input id="admin-product-valid-from" class="form-control" type="date" required />
+                  </div>
+                  <div class="col-md-3">
+                    <label for="admin-product-valid-to" class="form-label">Válido hasta</label>
+                    <input id="admin-product-valid-to" class="form-control" type="date" required />
+                  </div>
+                  <div class="col-md-6 d-flex gap-2 align-items-end">
+                    <button id="admin-product-submit" class="btn btn-success" type="submit">Guardar producto</button>
+                    <button id="admin-product-cancel" class="btn btn-outline-secondary d-none" type="button">Cancelar edición</button>
+                  </div>
+                </form>
+
+                <div id="admin-products-list" class="mt-4">
+                  <p class="text-secondary mb-0">Cargando productos...</p>
+                </div>
+              </article>
+            </div>
+
+            <div class="col-12 admin-entity-section d-none" data-admin-section="categories">
+              <article class="admin-entity-card p-3 p-lg-4 h-100">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                  <div>
+                    <h3 class="h5 mb-1">Categorías</h3>
+                    <p class="text-secondary mb-0">Mantienen el orden lógico del catálogo y se trabajan en una vista separada para no sobrecargar el panel.</p>
+                  </div>
+                  <span id="admin-categories-status" class="badge text-bg-light">Listo</span>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <p id="admin-categories-page-info" class="small text-secondary mb-0">Página 1 de 1</p>
+                  <div class="d-flex gap-2">
+                    <button id="admin-categories-new" class="btn btn-sm btn-success" type="button">Nueva categoría</button>
+                    <button id="admin-categories-prev" class="btn btn-sm btn-outline-secondary" type="button">Anterior</button>
+                    <button id="admin-categories-next" class="btn btn-sm btn-outline-secondary" type="button">Siguiente</button>
+                    <button id="admin-categories-export" class="btn btn-sm btn-outline-success" type="button">Bajar Excel</button>
+                  </div>
+                </div>
+
+                <div class="admin-filter-grid mb-3">
+                  <div>
+                    <label for="admin-categories-search" class="form-label">Búsqueda global</label>
+                    <input id="admin-categories-search" class="form-control" type="search" placeholder="Nombre o descripción" />
+                  </div>
+                  <div>
+                    <label for="admin-categories-sort-by" class="form-label">Ordenar por</label>
+                    <select id="admin-categories-sort-by" class="form-select">
+                      <option value="id">ID</option>
+                      <option value="name">Nombre</option>
+                      <option value="description">Descripción</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="admin-categories-sort-order" class="form-label">Dirección</label>
+                    <select id="admin-categories-sort-order" class="form-select">
+                      <option value="asc">Ascendente</option>
+                      <option value="desc">Descendente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="admin-categories-filter-name" class="form-label">Filtrar nombre</label>
+                    <input id="admin-categories-filter-name" class="form-control" type="search" placeholder="Ejemplo: hogar" />
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end mb-3">
+                  <button id="admin-categories-clear-filters" class="btn btn-sm btn-outline-secondary" type="button">Limpiar filtros</button>
+                </div>
+
+                <form id="admin-category-form" class="row g-3 d-none">
+                  <input id="admin-category-id" type="hidden" />
+                  <div class="col-12">
+                    <label for="admin-category-name" class="form-label">Nombre</label>
+                    <input id="admin-category-name" class="form-control" type="text" required />
+                  </div>
+                  <div class="col-12">
+                    <label for="admin-category-description" class="form-label">Descripción</label>
+                    <textarea id="admin-category-description" class="form-control" rows="2"></textarea>
+                  </div>
+                  <div class="col-12 d-flex gap-2">
+                    <button id="admin-category-submit" class="btn btn-success" type="submit">Guardar categoría</button>
+                    <button id="admin-category-cancel" class="btn btn-outline-secondary d-none" type="button">Cancelar</button>
+                  </div>
+                </form>
+
+                <div id="admin-categories-list" class="mt-4">
+                  <p class="text-secondary mb-0">Cargando categorías...</p>
+                </div>
+              </article>
+            </div>
+
+            <div class="col-12 admin-entity-section d-none" data-admin-section="clients">
+              <article class="admin-entity-card p-3 p-lg-4 h-100">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                  <div>
+                    <h3 class="h5 mb-1">Clientes</h3>
+                    <p class="text-secondary mb-0">Datos básicos para checkout y seguimiento, con paginación para explicar lectura por bloques.</p>
+                  </div>
+                  <span id="admin-clients-status" class="badge text-bg-light">Listo</span>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <p id="admin-clients-page-info" class="small text-secondary mb-0">Página 1 de 1</p>
+                  <div class="d-flex gap-2">
+                    <button id="admin-clients-new" class="btn btn-sm btn-success" type="button">Nuevo cliente</button>
+                    <button id="admin-clients-prev" class="btn btn-sm btn-outline-secondary" type="button">Anterior</button>
+                    <button id="admin-clients-next" class="btn btn-sm btn-outline-secondary" type="button">Siguiente</button>
+                    <button id="admin-clients-export" class="btn btn-sm btn-outline-success" type="button">Bajar Excel</button>
+                  </div>
+                </div>
+
+                <div class="admin-filter-grid mb-3">
+                  <div>
+                    <label for="admin-clients-search" class="form-label">Búsqueda global</label>
+                    <input id="admin-clients-search" class="form-control" type="search" placeholder="Nombre o email" />
+                  </div>
+                  <div>
+                    <label for="admin-clients-sort-by" class="form-label">Ordenar por</label>
+                    <select id="admin-clients-sort-by" class="form-select">
+                      <option value="id">ID</option>
+                      <option value="name">Nombre</option>
+                      <option value="email">Email</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="admin-clients-sort-order" class="form-label">Dirección</label>
+                    <select id="admin-clients-sort-order" class="form-select">
+                      <option value="asc">Ascendente</option>
+                      <option value="desc">Descendente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="admin-clients-filter-name" class="form-label">Filtrar nombre</label>
+                    <input id="admin-clients-filter-name" class="form-control" type="search" placeholder="Ejemplo: juan" />
+                  </div>
+                  <div>
+                    <label for="admin-clients-filter-email" class="form-label">Filtrar email</label>
+                    <input id="admin-clients-filter-email" class="form-control" type="search" placeholder="Ejemplo: @example.com" />
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end mb-3">
+                  <button id="admin-clients-clear-filters" class="btn btn-sm btn-outline-secondary" type="button">Limpiar filtros</button>
+                </div>
+
+                <form id="admin-client-form" class="row g-3 d-none">
+                  <input id="admin-client-id" type="hidden" />
+                  <div class="col-12">
+                    <label for="admin-client-name" class="form-label">Nombre</label>
+                    <input id="admin-client-name" class="form-control" type="text" required />
+                  </div>
+                  <div class="col-12">
+                    <label for="admin-client-email" class="form-label">Email</label>
+                    <input id="admin-client-email" class="form-control" type="email" required />
+                  </div>
+                  <div class="col-12 d-flex gap-2">
+                    <button id="admin-client-submit" class="btn btn-success" type="submit">Guardar cliente</button>
+                    <button id="admin-client-cancel" class="btn btn-outline-secondary d-none" type="button">Cancelar</button>
+                  </div>
+                </form>
+
+                <div id="admin-clients-list" class="mt-4">
+                  <p class="text-secondary mb-0">Cargando clientes...</p>
+                </div>
+              </article>
+            </div>
+
+            <div class="col-12 admin-entity-section d-none" data-admin-section="discounts">
+              <article class="admin-entity-card p-3 p-lg-4 h-100">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                  <div>
+                    <h3 class="h5 mb-1">Descuentos</h3>
+                    <p class="text-secondary mb-0">Promociones que después impactan en checkout, separadas para que el admin trabaje con foco.</p>
+                  </div>
+                  <span id="admin-discounts-status" class="badge text-bg-light">Listo</span>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <p id="admin-discounts-page-info" class="small text-secondary mb-0">Página 1 de 1</p>
+                  <div class="d-flex gap-2">
+                    <button id="admin-discounts-new" class="btn btn-sm btn-success" type="button">Nuevo descuento</button>
+                    <button id="admin-discounts-prev" class="btn btn-sm btn-outline-secondary" type="button">Anterior</button>
+                    <button id="admin-discounts-next" class="btn btn-sm btn-outline-secondary" type="button">Siguiente</button>
+                    <button id="admin-discounts-export" class="btn btn-sm btn-outline-success" type="button">Bajar Excel</button>
+                  </div>
+                </div>
+
+                <div class="admin-filter-grid mb-3">
+                  <div>
+                    <label for="admin-discounts-search" class="form-label">Búsqueda global</label>
+                    <input id="admin-discounts-search" class="form-control" type="search" placeholder="Código" />
+                  </div>
+                  <div>
+                    <label for="admin-discounts-sort-by" class="form-label">Ordenar por</label>
+                    <select id="admin-discounts-sort-by" class="form-select">
+                      <option value="id">ID</option>
+                      <option value="code">Código</option>
+                      <option value="percent">Porcentaje</option>
+                      <option value="minTotal">Mínimo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="admin-discounts-sort-order" class="form-label">Dirección</label>
+                    <select id="admin-discounts-sort-order" class="form-select">
+                      <option value="asc">Ascendente</option>
+                      <option value="desc">Descendente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="admin-discounts-filter-code" class="form-label">Filtrar código</label>
+                    <input id="admin-discounts-filter-code" class="form-control" type="search" placeholder="Ejemplo: alumno" />
+                  </div>
+                  <div>
+                    <label for="admin-discounts-filter-percent" class="form-label">Filtrar porcentaje</label>
+                    <input id="admin-discounts-filter-percent" class="form-control" type="search" placeholder="Ejemplo: 10" />
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end mb-3">
+                  <button id="admin-discounts-clear-filters" class="btn btn-sm btn-outline-secondary" type="button">Limpiar filtros</button>
+                </div>
+
+                <form id="admin-discount-form" class="row g-3 d-none">
+                  <input id="admin-discount-id" type="hidden" />
+                  <div class="col-12">
+                    <label for="admin-discount-code" class="form-label">Código</label>
+                    <input id="admin-discount-code" class="form-control" type="text" required />
+                  </div>
+                  <div class="col-6">
+                    <label for="admin-discount-percent" class="form-label">Porcentaje</label>
+                    <input id="admin-discount-percent" class="form-control" type="number" min="0" max="100" step="0.01" required />
+                  </div>
+                  <div class="col-6">
+                    <label for="admin-discount-min-total" class="form-label">Mínimo</label>
+                    <input id="admin-discount-min-total" class="form-control" type="number" min="0" step="0.01" required />
+                  </div>
+                  <div class="col-12 d-flex gap-2">
+                    <button id="admin-discount-submit" class="btn btn-success" type="submit">Guardar descuento</button>
+                    <button id="admin-discount-cancel" class="btn btn-outline-secondary d-none" type="button">Cancelar</button>
+                  </div>
+                </form>
+
+                <div id="admin-discounts-list" class="mt-4">
+                  <p class="text-secondary mb-0">Cargando descuentos...</p>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
       </section>
 
+      <div id="storefront-view" class="view-shell">
       <section class="hero-panel p-4 p-lg-5 mb-4">
         <div class="row align-items-center g-4">
           <div class="col-lg-8">
-            <p class="text-uppercase small fw-semibold mb-2">Clase 8, 9 y 10</p>
-            <h1 class="display-6 fw-bold mb-3">Catálogo con carrito, relaciones y seguridad por roles</h1>
+            <p class="text-uppercase small fw-semibold mb-2">Clase 8, 9, 10 y 11</p>
+            <h1 class="display-6 fw-bold mb-3">Catálogo con carrito, seguridad y panel administrador real</h1>
             <p class="mb-0">
-              Esta pantalla consume la API real, aplica filtros por categoría con query parameters, usa relaciones de Sequelize para mostrar la categoría de cada producto, persiste el carrito en <code>localStorage</code>, completa el checkout y ahora adapta la interfaz según la sesión.
+              Esta pantalla consume la API real, aplica filtros por categoría con query parameters, usa relaciones de Sequelize para mostrar la categoría de cada producto, persiste el carrito en <code>localStorage</code>, completa el checkout, adapta la interfaz según la sesión y ahora permite mantenimiento administrativo de entidades.
             </p>
           </div>
           <div class="col-lg-4">
@@ -202,13 +568,16 @@
 
               <div class="mb-3">
                 <label for="client-id" class="form-label">Cliente para checkout</label>
-                <select id="client-id" class="form-select"></select>
+                <input id="client-id" class="form-control" type="number" min="1" step="1" placeholder="Ejemplo: 1" />
+                <div class="form-text">
+                  Por seguridad, la lista de clientes ya no es pública. Ingresá manualmente un ID válido.
+                </div>
               </div>
 
               <div class="mb-3">
                 <label for="discount-code" class="form-label">Código de descuento</label>
                 <input id="discount-code" class="form-control" type="text" placeholder="ALUMNO10" />
-                <div class="form-text">Podés elegir uno del panel de descuentos.</div>
+                <div class="form-text">Si conocés un código válido, podés ingresarlo manualmente.</div>
               </div>
 
               <div id="cart-items" class="mb-3">
@@ -236,22 +605,23 @@
 
           <div class="card support-panel mb-4">
             <div class="card-body p-4">
-              <h2 class="h5 panel-title mb-3">Clientes disponibles</h2>
+              <h2 class="h5 panel-title mb-3">Clientes</h2>
               <div id="clients-list">
-                <p class="text-secondary mb-0">Cargando clientes...</p>
+                <p class="text-secondary mb-0">La lista de clientes está restringida al panel administrador.</p>
               </div>
             </div>
           </div>
 
           <div class="card support-panel">
             <div class="card-body p-4">
-              <h2 class="h5 panel-title mb-3">Descuentos disponibles</h2>
+              <h2 class="h5 panel-title mb-3">Descuentos</h2>
               <div id="discounts-list">
-                <p class="text-secondary mb-0">Cargando descuentos...</p>
+                <p class="text-secondary mb-0">Los descuentos disponibles se consultan desde administración o por código conocido.</p>
               </div>
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
 

@@ -9,14 +9,15 @@ const controller = require('../controllers/categoriesController');
 
 // asyncHandler captura errores de funciones async y los envía a next(error).
 const asyncHandler = require('../utils/asyncHandler');
+const { authenticateToken, isAdmin } = require('../middlewares/authMiddleware');
 
 // Esta ruta nueva permite gestionar la tabla categories.
 // El parámetro :id, cuando existe, viaja en req.params.id hacia el controller.
 router.get('/', asyncHandler(controller.getAll));
 router.get('/:id', asyncHandler(controller.getById));
-router.post('/', asyncHandler(controller.create));
-router.put('/:id', asyncHandler(controller.update));
-router.delete('/:id', asyncHandler(controller.remove));
+router.post('/', authenticateToken, isAdmin, asyncHandler(controller.create));
+router.put('/:id', authenticateToken, isAdmin, asyncHandler(controller.update));
+router.delete('/:id', authenticateToken, isAdmin, asyncHandler(controller.remove));
 
 // module.exports entrega el router terminado para que server.js lo monte.
 module.exports = router;

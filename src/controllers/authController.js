@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 
 // User es el modelo que representa a los usuarios autenticables.
 const { User } = require('../models');
+const { sendError } = require('../utils/apiResponse');
 
 const authController = {
   async login(req, res) {
@@ -14,14 +15,14 @@ const authController = {
     const user = await User.findOne({ where: { email } });
 
     if (!user) {
-      return res.status(401).json({ error: 'Credenciales invalidas' });
+      return sendError(res, 401, 'Credenciales inválidas');
     }
 
     // comparePassword delega la comparación a bcrypt.
     const passwordOk = await user.comparePassword(password);
 
     if (!passwordOk) {
-      return res.status(401).json({ error: 'Credenciales invalidas' });
+      return sendError(res, 401, 'Credenciales inválidas');
     }
 
     // El payload contiene solo información pública y útil para autorización.

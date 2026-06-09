@@ -1,5 +1,6 @@
 // Client se usa para verificar que el cliente comprador exista.
 const { Client } = require('../models');
+const { sendError, sendSuccess } = require('../utils/apiResponse');
 
 // Estas tres funciones salen del módulo de negocio Checkout.
 // Se importan con destructuring porque module.exports devuelve un objeto
@@ -17,11 +18,11 @@ const checkoutController = {
       const client = await Client.findByPk(clientId);
 
       if (!client) {
-        return res.status(400).json({ error: 'Cliente inválido' });
+        return sendError(res, 422, 'Cliente inválido');
       }
 
       if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ error: 'Carrito vacío' });
+        return sendError(res, 422, 'Carrito vacío');
       }
 
       const subtotal = await calculateCartTotal(items);
@@ -41,12 +42,12 @@ const checkoutController = {
         discountCode: discountResult.appliedCode
       };
 
-      return res.status(201).json({ order });
+      return sendSuccess(res, { order }, 201);
     } catch (error) {
       // error nace en cualquier await interno que lance una excepción.
       // Acá respondemos 400 porque el problema suele estar en datos inválidos
       // del carrito, cliente o descuento.
-      return res.status(400).json({ error: error.message });
+      return sendError(res, 422, 'No se pudo completar el checkout.', error.message);
     }
   }
 };

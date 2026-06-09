@@ -9,12 +9,13 @@ const controller = require('../controllers/discountsController');
 
 // asyncHandler conecta handlers async con el flujo de errores de Express 4.
 const asyncHandler = require('../utils/asyncHandler');
+const { authenticateToken, isAdmin } = require('../middlewares/authMiddleware');
 
-router.get('/', asyncHandler(controller.getAll));
-router.get('/:id', asyncHandler(controller.getById));
-router.post('/', asyncHandler(controller.create));
-router.put('/:id', asyncHandler(controller.update));
-router.delete('/:id', asyncHandler(controller.remove));
+router.get('/', authenticateToken, isAdmin, asyncHandler(controller.getAll));
+router.get('/:id', authenticateToken, isAdmin, asyncHandler(controller.getById));
+router.post('/', authenticateToken, isAdmin, asyncHandler(controller.create));
+router.put('/:id', authenticateToken, isAdmin, asyncHandler(controller.update));
+router.delete('/:id', authenticateToken, isAdmin, asyncHandler(controller.remove));
 
 // module.exports expone el router para que server.js lo monte en /api/descuentos.
 module.exports = router;

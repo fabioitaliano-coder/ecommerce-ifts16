@@ -2,6 +2,10 @@
 // - Product: para operar sobre la tabla products
 // - Category: para validar y cargar la categoría relacionada
 const { Product, Category } = require('../models');
+const { Op } = require('sequelize');
+const { parsePagination, buildPaginationMeta, sendCsv } = require('../utils/pagination');
+const { sendSuccess, sendPaginated, sendError } = require('../utils/apiResponse');
+const { validateProductPayload } = require('../utils/validation');
 
 // Este archivo cumple el rol de CONTROLLER.
 // En MVC, el controller es el "cocinero":
@@ -21,12 +25,109 @@ const productsController = {
     //
     // Archivo siguiente para mirar en clase:
     // ../models/index.js
-    const products = await Product.findAll({
-      include: [{ model: Category, as: 'category' }],
-      order: [['id', 'ASC']]
+    const categoryId = req.query.categoryId || req.query.categoria;
+    const wantsCsv = req.query.format === 'csv';
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const filterName = typeof req.query.filterName === 'string' ? req.query.filterName.trim() : '';
+    const filterCategory = typeof req.query.filterCategory === 'string' ? req.query.filterCategory.trim() : '';
+    const filterStock = typeof req.query.filterStock === 'string' ? req.query.filterStock.trim() : '';
+    const sortBy = ['id', 'name', 'price', 'stock', 'validFrom', 'validTo'].includes(req.query.sortBy)
+      ? req.query.sortBy
+      : 'id';
+    const sortOrder = req.query.sortOrder === 'desc' ? 'DESC' : 'ASC';
+    const where = {};
+    const categoryWhere = {};
+
+    if (categoryId) {
+      where.categoryId = Number(categoryId);
+    }
+
+    if (search) {
+      where.name = {
+        [Op.like]: `%${search}%`
+      };
+    }
+
+    if (filterName) {
+      where.name = {
+        [Op.like]: `%${filterName}%`
+      };
+    }
+
+    if (filterStock) {
+      const parsedStock = Number(filterStock);
+      if (!Number.isNaN(parsedStock)) {
+        where.stock = parsedStock;
+      }
+    }
+
+    if (filterCategory) {
+      categoryWhere.name = {
+        [Op.like]: `%${filterCategory}%`
+      };
+    }
+
+    if (wantsCsv) {
+      // Paso a paso:
+      // 1. consultamos los datos completos sin paginar
+      // 2. los transformamos a filas planas
+      // 3. devolvemos un CSV que Excel puede abrir sin problema
+      const products = await Product.findAll({
+        where,
+        include: [{
+          model: Category,
+          as: 'category',
+          ...(Object.keys(categoryWhere).length > 0 ? { where: categoryWhere } : {})
+        }],
+        order: [[sortBy, sortOrder]]
+      });
+
+      return sendCsv(
+        res,
+        'productos.csv',
+        ['id', 'name', 'price', 'stock', 'category', 'validFrom', 'validTo'],
+        products.map(product => [
+          product.id,
+          product.name,
+          product.price,
+          product.stock,
+          product.category?.name || '',
+          product.validFrom,
+          product.validTo
+        ])
+      );
+    }
+
+    // Convencion API:
+    // los listados ya no devuelven todos los registros de una sola vez.
+    // Siempre responden con:
+    // - items
+    // - pagination
+    //
+    // page indica "que pagina quiero"
+    // limit indica "cuantos registros por pagina"
+    // offset calcula desde que fila empezar
+    //
+    // Ejemplo:
+    // page = 2, limit = 5
+    // offset = (2 - 1) * 5 = 5
+    // Sequelize trae desde el sexto registro en adelante.
+    const { page, limit, offset } = parsePagination(req.query, 8, 50);
+
+    const result = await Product.findAndCountAll({
+      where,
+      include: [{
+        model: Category,
+        as: 'category',
+        ...(Object.keys(categoryWhere).length > 0 ? { where: categoryWhere } : {})
+      }],
+      order: [[sortBy, sortOrder]],
+      limit,
+      offset,
+      distinct: true
     });
 
-    return res.json(products);
+    return sendPaginated(res, result.rows, buildPaginationMeta(page, limit, result.count));
   },
 
   async getById(req, res) {
@@ -39,10 +140,10 @@ const productsController = {
     });
 
     if (!product) {
-      return res.status(404).json({ error: 'Producto no encontrado' });
+      return sendError(res, 404, 'Producto no encontrado');
     }
 
-    return res.json(product);
+    return sendSuccess(res, product);
   },
 
   async create(req, res) {
@@ -50,22 +151,33 @@ const productsController = {
     // Ese middleware toma el JSON enviado por el cliente y lo convierte
     // en un objeto JavaScript disponible acá.
     // req.body trae los datos enviados por el cliente en formato JSON.
-    const { name, price, stock, photoURL,categoryId } = req.body;
+    const payload = {
+      ...req.body,
+      validFrom: req.body.validFrom || '2000-01-01',
+      validTo: req.body.validTo || '2099-12-31'
+    };
+    const { errors, normalized } = validateProductPayload(payload);
+
+    if (errors.length > 0) {
+      return sendError(res, 422, 'Datos inválidos para producto.', errors);
+    }
 
     // Verificamos primero que exista la categoría elegida.
-    const category = await Category.findByPk(categoryId);
+    const category = await Category.findByPk(normalized.categoryId);
     if (!category) {
-      return res.status(400).json({ error: 'Categoria invalida' });
+      return sendError(res, 422, 'Categoría inválida.');
     }
 
     // create() inserta una fila en la tabla products.
-    const product = await Product.create({ name, price, stock, categoryId });
+    const product = await Product.create({
+      ...normalized
+    });
 
     const createdProduct = await Product.findByPk(product.id, {
       include: [{ model: Category, as: 'category' }]
     });
 
-    return res.status(201).json(createdProduct);
+    return sendSuccess(res, createdProduct, 201);
   },
 
   async update(req, res) {
@@ -74,22 +186,29 @@ const productsController = {
     const product = await Product.findByPk(req.params.id);
 
     if (!product) {
-      return res.status(404).json({ error: 'Producto no encontrado' });
+      return sendError(res, 404, 'Producto no encontrado');
     }
 
     // Solo actualizamos los campos que efectivamente llegaron.
     // Esto evita pisar datos por error.
-    const { name, price, stock, categoryId } = req.body;
-    if (name !== undefined) product.name = name;
-    if (price !== undefined) product.price = price;
-    if (stock !== undefined) product.stock = stock;
-    if (categoryId !== undefined) {
-      const category = await Category.findByPk(categoryId);
-      if (!category) {
-        return res.status(400).json({ error: 'Categoria invalida' });
-      }
-      product.categoryId = categoryId;
+    const { errors, normalized } = validateProductPayload(req.body, { partial: true });
+
+    if (errors.length > 0) {
+      return sendError(res, 422, 'Datos inválidos para producto.', errors);
     }
+
+    if (normalized.name !== undefined) product.name = normalized.name;
+    if (normalized.price !== undefined) product.price = normalized.price;
+    if (normalized.stock !== undefined) product.stock = normalized.stock;
+    if (normalized.categoryId !== undefined) {
+      const category = await Category.findByPk(normalized.categoryId);
+      if (!category) {
+        return sendError(res, 422, 'Categoría inválida.');
+      }
+      product.categoryId = normalized.categoryId;
+    }
+    if (normalized.validFrom !== undefined) product.validFrom = normalized.validFrom;
+    if (normalized.validTo !== undefined) product.validTo = normalized.validTo;
 
     await product.save();
 
@@ -97,7 +216,7 @@ const productsController = {
       include: [{ model: Category, as: 'category' }]
     });
 
-    return res.json(updatedProduct);
+    return sendSuccess(res, updatedProduct);
   },
 
   async remove(req, res) {
@@ -105,7 +224,7 @@ const productsController = {
     const product = await Product.findByPk(req.params.id);
 
     if (!product) {
-      return res.status(404).json({ error: 'Producto no encontrado' });
+      return sendError(res, 404, 'Producto no encontrado');
     }
 
     // destroy() elimina el registro persistido en la base.

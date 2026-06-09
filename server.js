@@ -16,6 +16,8 @@ const discountsRouter = require('./src/routes/discounts');
 const checkoutRouter = require('./src/routes/checkout');
 const categoriesRouter = require('./src/routes/categories');
 const authRouter = require('./src/routes/auth');
+const adminRouter = require('./src/routes/admin');
+const { sendError, sendSuccess } = require('./src/utils/apiResponse');
 
 // initializeDatabase sale de src/models/index.js.
 // Es la función que sincroniza tablas y ejecuta el seed inicial.
@@ -50,14 +52,14 @@ app.use('/api/clientes', clientsRouter);
 app.use('/api/descuentos', discountsRouter);
 app.use('/api/checkout', checkoutRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 
 // Ruta auxiliar para mostrar qué recursos existen en la API.
 app.get('/api', (req, res) => {
   // req y res los crea Express.
   // En esta ruta no necesitamos leer req, pero sí usamos res para devolver
   // un mapa simple de recursos disponibles.
-  res.json({
-    ok: true,
+  sendSuccess(res, {
     recursos: ['/api/productos', '/api/categorias', '/api/clientes', '/api/descuentos', '/api/checkout', '/api/auth/login']
   });
 });
@@ -71,23 +73,14 @@ app.use((error, req, res, next) => {
   console.error(error);
 
   if (error.name === 'SequelizeValidationError') {
-    return res.status(400).json({
-      error: 'Datos invalidos',
-      detail: error.errors.map(item => item.message)
-    });
+    return sendError(res, 422, 'Datos inválidos.', error.errors.map(item => item.message));
   }
 
   if (error.name === 'SequelizeUniqueConstraintError') {
-    return res.status(409).json({
-      error: 'El valor ya existe y debe ser unico',
-      detail: error.errors.map(item => item.message)
-    });
+    return sendError(res, 409, 'El valor ya existe y debe ser único.', error.errors.map(item => item.message));
   }
 
-  return res.status(500).json({
-    error: 'Ocurrio un error interno',
-    detail: error.message
-  });
+  return sendError(res, 500, 'Ocurrió un error interno.');
 });
 
 // Puerto por defecto para la cursada:

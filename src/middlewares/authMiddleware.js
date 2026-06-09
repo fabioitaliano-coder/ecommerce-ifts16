@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { sendError } = require('../utils/apiResponse');
 
 // authenticateToken valida identidad:
 // - lee el header Authorization
@@ -29,9 +30,7 @@ function authenticateToken(req, res, next) {
     : null;
 
   if (!token) {
-    return res.status(401).json({
-      error: 'Acceso denegado. Token no provisto.'
-    });
+    return sendError(res, 401, 'Acceso denegado. Token no provisto.');
   }
 
   try {
@@ -52,9 +51,7 @@ function authenticateToken(req, res, next) {
     // "esta parte salió bien, seguí con la próxima función del pipeline".
     return next();
   } catch (error) {
-    return res.status(403).json({
-      error: 'Token invalido o expirado.'
-    });
+    return sendError(res, 403, 'Token inválido o expirado.');
   }
 }
 
@@ -66,9 +63,7 @@ function authenticateToken(req, res, next) {
 // isAdmin responde "qué te dejo hacer".
 function isAdmin(req, res, next) {
   if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({
-      error: 'Acceso restringido. Se requieren permisos de administrador.'
-    });
+    return sendError(res, 403, 'Acceso restringido. Se requieren permisos de administrador.');
   }
 
   return next();

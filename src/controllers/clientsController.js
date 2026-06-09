@@ -1,11 +1,73 @@
 // Client es el modelo Sequelize asociado a la tabla clients.
 const { Client } = require('../models');
+const { Op } = require('sequelize');
+const { parsePagination, buildPaginationMeta, sendCsv } = require('../utils/pagination');
+const { sendSuccess, sendPaginated, sendError } = require('../utils/apiResponse');
+const { validateClientPayload } = require('../utils/validation');
 
 const clientsController = {
   async getAll(req, res) {
     // req es la petición entrante; res es la respuesta saliente.
-    const clients = await Client.findAll({ order: [['id', 'ASC']] });
-    return res.json(clients);
+    const wantsCsv = req.query.format === 'csv';
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const filterName = typeof req.query.filterName === 'string' ? req.query.filterName.trim() : '';
+    const filterEmail = typeof req.query.filterEmail === 'string' ? req.query.filterEmail.trim() : '';
+    const sortBy = ['id', 'name', 'email'].includes(req.query.sortBy)
+      ? req.query.sortBy
+      : 'id';
+    const sortOrder = req.query.sortOrder === 'desc' ? 'DESC' : 'ASC';
+    const where = {};
+    const andFilters = [];
+
+    if (search) {
+      andFilters.push({
+        [Op.or]: [
+          { name: { [Op.like]: `%${search}%` } },
+          { email: { [Op.like]: `%${search}%` } }
+        ]
+      });
+    }
+
+    if (filterName) {
+      andFilters.push({
+        name: { [Op.like]: `%${filterName}%` }
+      });
+    }
+
+    if (filterEmail) {
+      andFilters.push({
+        email: { [Op.like]: `%${filterEmail}%` }
+      });
+    }
+
+    if (andFilters.length > 0) {
+      where[Op.and] = andFilters;
+    }
+
+    if (wantsCsv) {
+      // Excel puede abrir CSV sin necesidad de una libreria extra.
+      // Para una clase inicial, esto mantiene el foco en el flujo HTTP
+      // y no en una dependencia adicional de exportacion.
+      const clients = await Client.findAll({ where, order: [[sortBy, sortOrder]] });
+
+      return sendCsv(
+        res,
+        'clientes.csv',
+        ['id', 'name', 'email'],
+        clients.map(client => [client.id, client.name, client.email])
+      );
+    }
+
+    const { page, limit, offset } = parsePagination(req.query, 10, 50);
+
+    const result = await Client.findAndCountAll({
+      where,
+      order: [[sortBy, sortOrder]],
+      limit,
+      offset
+    });
+
+    return sendPaginated(res, result.rows, buildPaginationMeta(page, limit, result.count));
   },
 
   async getById(req, res) {
@@ -13,17 +75,22 @@ const clientsController = {
     const client = await Client.findByPk(req.params.id);
 
     if (!client) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
+      return sendError(res, 404, 'Cliente no encontrado');
     }
 
-    return res.json(client);
+    return sendSuccess(res, client);
   },
 
   async create(req, res) {
     // req.body trae name y email enviados como JSON por el cliente HTTP.
-    const { name, email } = req.body;
-    const client = await Client.create({ name, email });
-    return res.status(201).json(client);
+    const { errors, normalized } = validateClientPayload(req.body);
+
+    if (errors.length > 0) {
+      return sendError(res, 422, 'Datos inválidos para cliente.', errors);
+    }
+
+    const client = await Client.create(normalized);
+    return sendSuccess(res, client, 201);
   },
 
   async update(req, res) {
@@ -32,15 +99,20 @@ const clientsController = {
     const client = await Client.findByPk(req.params.id);
 
     if (!client) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
+      return sendError(res, 404, 'Cliente no encontrado');
     }
 
-    const { name, email } = req.body;
-    if (name !== undefined) client.name = name;
-    if (email !== undefined) client.email = email;
+    const { errors, normalized } = validateClientPayload(req.body, { partial: true });
+
+    if (errors.length > 0) {
+      return sendError(res, 422, 'Datos inválidos para cliente.', errors);
+    }
+
+    if (normalized.name !== undefined) client.name = normalized.name;
+    if (normalized.email !== undefined) client.email = normalized.email;
 
     await client.save();
-    return res.json(client);
+    return sendSuccess(res, client);
   },
 
   async remove(req, res) {
@@ -48,7 +120,7 @@ const clientsController = {
     const client = await Client.findByPk(req.params.id);
 
     if (!client) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
+      return sendError(res, 404, 'Cliente no encontrado');
     }
 
     await client.destroy();
